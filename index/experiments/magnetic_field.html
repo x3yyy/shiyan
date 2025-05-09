@@ -1,0 +1,85 @@
+<!DOCTYPE html><html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>带电粒子在磁场中运动</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <style>
+    body {
+      font-family: "Arial", sans-serif;
+      margin: 0;
+      background: #f0f0f0;
+    }
+    header {
+      background-color: #4CAF50;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+      font-size: 1.8rem;
+    }
+    .container {
+      display: flex;
+      justify-content: center;
+      padding: 2rem;
+    }
+    canvas {
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <header>带电粒子在磁场中运动实验</header>
+  <div class="container">
+    <script>
+      let particle;
+      let magneticField;function setup() {
+    createCanvas(600, 400);
+    particle = new Particle(width / 4, height / 2, 20, createVector(3, 0));
+    magneticField = createVector(0, 1); // 假设磁场垂直于屏幕
+  }
+
+  function draw() {
+    background(240);
+
+    // 计算洛伦兹力 F = q(v × B)
+    let lorentzForce = p5.Vector.cross(particle.velocity, magneticField);
+    lorentzForce.mult(1);  // q=1, 单位电荷
+    particle.applyForce(lorentzForce);
+
+    particle.update();
+    particle.display();
+
+    // 显示磁场方向
+    stroke(0, 0, 255);
+    line(width / 2, 0, width / 2, height);
+    noStroke();
+  }
+
+  class Particle {
+    constructor(x, y, r, velocity) {
+      this.position = createVector(x, y);
+      this.velocity = velocity;
+      this.acceleration = createVector(0, 0);
+      this.radius = r;
+    }
+
+    applyForce(force) {
+      this.acceleration.add(force);
+    }
+
+    update() {
+      this.velocity.add(this.acceleration);
+      this.position.add(this.velocity);
+      this.acceleration.mult(0);
+    }
+
+    display() {
+      fill(255, 0, 0);
+      noStroke();
+      ellipse(this.position.x, this.position.y, this.radius * 2, this.radius * 2);
+    }
+  }
+</script>
+
+  </div>
+</body>
+</html>

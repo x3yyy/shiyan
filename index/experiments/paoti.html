@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>我的p5.js项目</title>
+  <!-- 引入p5.js库 -->
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.6.0/lib/p5.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <script>
+// 抛体运动精确模拟与数据显示
+// 包含初速度和加速度设置、分速度/合速度显示、分位移/合位移显示以及偏向角显示
+
+// 全局变量
+let projectile; // 抛射体对象
+let gravity; // 重力加速度向量
+let trails = []; // 轨迹点数组
+let timeStep = 1/60; // 模拟时间步长（秒）
+let simTime = 0; // 模拟经过的时间
+let paused = false; // 是否暂停
+let showVectors = true; // 是否显示矢量
+let initialPoint; // 初始位置
+let currentVelocityMagnitude = 80; // 初始速度大小 (像素/秒)
+let currentLaunchAngle = 45; // 发射角度 (度)
+let timeScale = 1; // 时间缩放因子
+let scale = 10; // 像素到米的比例 (1米 = 10像素)
+let traceFrequency = 3; // 每隔多少帧记录一次轨迹
+let analyticalPoints = []; // 理论计算轨迹点
+
+// 控制面板设置
+let controlPanelHeight = 120;
+let sliders = {};
+let buttons = {};
+let charts = {};
+
+function setup() {
+  // 创建画布 - 留出顶部空间给控制面板
+  createCanvas(900, 600);
+  
+  // 定义重力
+  gravity = createVector(0, 9.8 * scale); // 9.8 m/s² 向下，转换为像素/秒²
+  
+  // 初始位置（画布左侧中部）
+  initialPoint = createVector(50, height - controlPanelHeight - 50);
+  
+  // 初始化控制面板
+  setupControlPanel();
+  
+  // 重置模拟
+  resetSimulation();
+}
+
+function setupControlPanel() {
+  // 初速度大小滑块
+  sliders.velocity = createSlider(0, 200, currentVelocityMagnitude, 1);
+  sliders.velocity.position(120, 20);
+  sliders.velocity.style('width', '180px');
+  
+  // 角度滑块
+  sliders.angle = createSlider(0, 90, currentLaunchAngle, 1);
+  sliders.angle.position(120, 50);
+  sliders.angle.style('width', '180px');
+  
+  // 重力大小滑块
+  sliders.gravity = createSlider(0, 20, gravity.y / scale, 0.1);
+  sliders.gravity.position(120, 80);
+  sliders.gravity.style('width', '180px');
+  
+  // 时间缩放滑块
+  sliders.timeScale = createSlider(0.1, 3, timeScale, 0.1);
+  sliders.timeScale.position(470, 20);
+  sliders.timeScale.style('width', '150px');
+  
+  // 重置按钮
+  buttons.reset = createButton('重置');
+  buttons.reset.position(350, 20);
+  buttons.reset.mousePressed(resetSimulation);
+  
+  // 暂停/继续按钮
+  buttons.pausePlay = createButton('暂停');
+  buttons.pausePlay.position(350, 50);
+  buttons.pausePlay.mousePressed(togglePause);
+  
+  // 显示/隐藏矢量按钮
+  buttons.toggleVectors = createButton('隐藏矢量');
+  buttons.toggleVectors.position(350, 80);
+  buttons.toggleVectors.mousePressed(toggleVectors);
+}
+
+function resetSimulation() {
+  // 更新控制值
+  currentVelocityMagnitude = sliders.velocity.value();
+  currentLaunchAngle = sliders.angle.value();
+  gravity = createVector(0, sliders.gravity.value() * scale); // 更新重力值，转换为像素单位
+  timeScale = sliders.timeScale.value();
+  
+  // 重置时间
+  simTime = 0;
+  
+  // 计算初始速度矢量 (角度从水平向上为正)
+  let angleRadians = radians(-currentLaunchAngle);  // 转换为弧度，负号使角度向上为正
+  let initialVelocity = createVector(
+    currentVelocityMagnitude * cos(angleRadians),
+    currentVelocityMagnitude * sin(angleRadians)
+  );
+  
+  // 创建抛射体对象
+  projectile = {
+    position: initialPoint.copy(),
+    velocity: initialVelocity.copy(),
+    acceleration: gravity.copy(),
+    radius: 10,
+    initialPosition: initialPoint.copy(),
+    initialVelocity: initialVelocity.copy(),
+    // 抛射体历史数据
+    history: {
+      positions: [initialPoint.copy()],
+      velocities: [initialVelocity.copy()],
+      times: [0]
+    }
+  };
+  
+  // 清空轨迹
+  trails = [];
+  
+  // 计算理论轨迹
+  calculateAnalyticalTrajectory();
+  
+  // 确保未暂停
+  paused = false;
+  buttons.pausePlay.html('暂停');
+}
+
+function calculateAnalyticalTrajectory() {
+  // 清空理论轨迹点
+  analyticalPoints = [];
+  
+  let v0 = projectile.initialVelocity.mag() / scale; // 初始速度大小 (米/秒)
+  let theta = -radians(currentLaunchAngle); // 发射角度 (弧度，负号使角度向上为正)
+  let g = gravity.y / scale; // 重力加速度 (米/秒²)
+  
+  // 计算理论飞行时间 (忽略空气阻力)
+  let totalFlightTime = 2 * v0 * sin(theta) / g;
+  
+  // 生成理论轨迹点
+  for (let t = 0; t <= totalFlightTime; t += 0.1) {
+    let x = projectile.initialPosition.x / scale + v0 * cos(theta) * t;
+    let y = projectile.initialPosition.y / scale - (v0 * sin(theta) * t - 0.5 * g * t * t);
+    
+    // 转换回像素坐标
+    analyticalPoints.push(createVector(x * scale, y * scale));
+  }
+}
+
+function draw() {
+  background(240);
+  
+  // 绘制控制面板背景
+  fill(220);
+  noStroke();
+  rect(0, 0, width, 110);
+  
+  // 绘制控制面板标签
+  drawControlLabels();
+  
+  // 更新滑块标签显示
+  updateControlValues();
+  
+  // 绘制参考网格
+  drawGrid();
+  
+  // 更新模拟
+  if (!paused) {
+    updateSimulation();
+  }
+  
+  // 绘制理论轨迹
+  drawAnalyticalTrajectory();
+  
+  // 绘制轨迹
+  drawTrail();
+  
+  // 显示当前数据
+  drawDataPanel();
+  
+  // 绘制抛射体
+  drawProjectile();
+}
+
+function drawControlLabels() {
+  fill(0);
+  noStroke();
+  textSize(14);
+  textAlign(LEFT, CENTER);
+  
+  // 左侧控制
+  text("初速度: " + currentVelocityMagnitude.toFixed(1) + " 像素/秒 (" + (currentVelocityMagnitude/scale).toFixed(1) + " m/s)", 10, 20);
+  text("发射角度: " + currentLaunchAngle.toFixed(1) + "°", 10, 50);
+  text("重力加速度: " + (gravity.y/scale).toFixed(1) + " m/s²", 10, 80);
+  
+  // 右侧控制
+  text("时间缩放: " + timeScale.toFixed(1) + "x", 390, 20);
+  
+  // 显示操作信息
+  fill(80);
+  textSize(12);
+  text("操作说明: 调整滑块修改参数，点击`重置`应用设置并重新开始", 650, 20);
+  text("空格键: 暂停/继续  R键: 重置  V键: 显示/隐藏矢量", 650, 45);
+  text("比例尺: 10像素 = 1米", 650, 70);
+}
+
+function updateControlValues() {
+  // 更新模拟参数（不重置模拟）
+  if (!paused) {
+    // 更新时间缩放
+    timeScale = sliders.timeScale.value();
+    
+    // 只在暂停时才更新其他参数
+    if (paused) {
+      currentVelocityMagnitude = sliders.velocity.value();
+      currentLaunchAngle = sliders.angle.value();
+      gravity = createVector(0, sliders.gravity.value() * scale);
+    }
+  }
+}
+
+function updateSimulation() {
+  // 应用时间步长与缩放
+  let dt = timeStep * timeScale;
+  simTime += dt;
+  
+  // 更新速度 (v = v0 + at)
+  projectile.velocity.add(p5.Vector.mult(projectile.acceleration, dt));
+  
+  // 更新位置 (x = x0 + vt)
+  let displacement = p5.Vector.mult(projectile.velocity, dt);
+  projectile.position.add(displacement);
+  
+  // 记录历史数据
+  if (frameCount % traceFrequency === 0) {
+    projectile.history.positions.push(projectile.position.copy());
+    projectile.history.velocities.push(projectile.velocity.copy());
+    projectile.history.times.push(simTime);
+    
+    // 添加轨迹点
+    trails.push({
+      position: projectile.position.copy(),
+      velocity: projectile.velocity.copy(),
+      time: simTime
+    });
+  }
+  
+  // 检测地面碰撞
+  if (projectile.position.y >= height - controlPanelHeight) {
+    projectile.position.y = height - controlPanelHeight;
+    paused = true;
+    buttons.pausePlay.html('继续');
+  }
+}
+
+function drawGrid() {
+  // 绘制网格线
+  stroke(220);
+  strokeWeight(1);
+  
+  // 垂直线 (每10像素=1米)
+  for (let x = 0; x <= width; x += scale) {
+    if (x % (scale * 5) === 0) {
+      stroke(200);
+      strokeWeight(1.5);
+    } else {
+      stroke(230);
+      strokeWeight(0.5);
+    }
+    line(x, 110, x, height);
+  }
+  
+  // 水平线
+  for (let y = 110; y <= height; y += scale) {
+    if ((height - y) % (scale * 5) === 0) {
+      stroke(200);
+      strokeWeight(1.5);
+    } else {
+      stroke(230);
+      strokeWeight(0.5);
+    }
+    line(0, y, width, y);
+  }
+  
+  // 坐标轴标签
+  fill(100);
+  noStroke();
+  textSize(10);
+  textAlign(CENTER, TOP);
+  
+  // x轴标签 (每5米标记一次)
+  for (let x = 0; x <= width; x += scale * 5) {
+    text((x / scale).toFixed(0) + "m", x, height - 15);
+  }
+  
+  // y轴标签
+  textAlign(RIGHT, CENTER);
+  for (let y = height - controlPanelHeight; y >= 110; y -= scale * 5) {
+    if (y < height - 20) { // 避免与x轴标签重叠
+      text(((height - controlPanelHeight - y) / scale).toFixed(0) + "m", 40, y);
+    }
+  }
+  
+  // 绘制地面
+  stroke(120);
+  strokeWeight(2);
+  line(0, height - controlPanelHeight, width, height - controlPanelHeight);
+}
+
+function drawProjectile() {
+  // 绘制抛射体
+  fill(255, 100, 100);
+  noStroke();
+  ellipse(projectile.position.x, projectile.position.y, projectile.radius * 2);
+  
+  // 如果显示矢量，则绘制速度和加速度向量
+  if (showVectors) {
+    // 绘制速度向量 (绿色)
+    let vScale = 0.5; // 速度向量缩放因子
+    drawVector(projectile.position, projectile.velocity, vScale, color(0, 200, 0), "V");
+    
+    // 绘制水平速度分量
+    let vx = createVector(projectile.velocity.x, 0);
+    drawVector(projectile.position, vx, vScale, color(0, 150, 0), "Vx");
+    
+    // 绘制垂直速度分量
+    let vy = createVector(0, projectile.velocity.y);
+    let vyStart = createVector(projectile.position.x, projectile.position.y);
+    drawVector(vyStart, vy, vScale, color(0, 150, 0), "Vy");
+    
+    // 绘制加速度向量 (黄色)
+    let aScale = 5; // 加速度向量缩放因子
+    drawVector(projectile.position, projectile.acceleration, aScale, color(255, 200, 0), "g");
+  }
+}
+
+function drawVector(start, vec, scale, color, label) {
+  push();
+  stroke(color);
+  strokeWeight(2);
+  fill(color);
+  
+  // 计算缩放后的向量终点
+  let end = p5.Vector.add(start, p5.Vector.mult(vec, scale));
+  
+  // 绘制线段
+  line(start.x, start.y, end.x, end.y);
+  
+  // 计算箭头
+  let arrowSize = 7;
+  let angle = atan2(vec.y, vec.x);
+  
+  // 绘制箭头
+  translate(end.x, end.y);
+  rotate(angle);
+  triangle(0, 0, -arrowSize, arrowSize/2, -arrowSize, -arrowSize/2);
+  
+  // 绘制标签
+  rotate(-angle);
+  textAlign(LEFT, BOTTOM);
+  textSize(12);
+  text(label, 5, -5);
+  pop();
+}
+
+function drawTrail() {
+  // 绘制轨迹线
+  noFill();
+  stroke(100, 100, 255, 200);
+  strokeWeight(2);
+  beginShape();
+  for (let point of trails) {
+    vertex(point.position.x, point.position.y);
+  }
+  vertex(projectile.position.x, projectile.position.y);
+  endShape();
+  
+  // 绘制时间标记点
+  strokeWeight(1);
+  for (let i = 0; i < trails.length; i += 5) {
+    let point = trails[i];
+    fill(100, 100, 255);
+    ellipse(point.position.x, point.position.y, 4, 4);
+    
+    // 每0.5秒显示一个时间标记
+    if (i % 15 === 0) {
+      noStroke();
+      fill(50, 50, 200);
+      textSize(10);
+      textAlign(LEFT, BOTTOM);
+      text(point.time.toFixed(1) + "s", point.position.x + 5, point.position.y - 3);
+    }
+  }
+}
+
+function drawAnalyticalTrajectory() {
+  // 绘制理论轨迹
+  noFill();
+  stroke(200, 200, 200, 150);
+  strokeWeight(1.5);
+  beginShape();
+  for (let point of analyticalPoints) {
+    vertex(point.x, point.y);
+  }
+  endShape();
+}
+
+function drawDataPanel() {
+  // 数据面板背景
+  fill(255, 255, 255, 220);
+  stroke(150);
+  strokeWeight(1);
+  rect(width - 260, 130, 250, 220, 5);
+  
+  // 标题
+  fill(50);
+  noStroke();
+  textSize(16);
+  textAlign(CENTER, TOP);
+  text("抛体运动数据分析", width - 135, 140);
+  
+  // 绘制数据
+  textAlign(LEFT, TOP);
+  textSize(12);
+  
+  // 计算当前物理量 (转换为物理单位 - 米)
+  let pixelPositionX = projectile.position.x - initialPoint.x;
+  let pixelPositionY = initialPoint.y - projectile.position.y; // 向上为正
+  
+  let realPositionX = pixelPositionX / scale;
+  let realPositionY = pixelPositionY / scale;
+  let realVelocityX = projectile.velocity.x / scale;
+  let realVelocityY = -projectile.velocity.y / scale; // 向上为正
+  let realSpeed = projectile.velocity.mag() / scale;
+  
+  // 计算偏向角 (相对于水平方向，向上为正)
+  let angle = -degrees(atan2(projectile.velocity.y, projectile.velocity.x));
+  
+  // 绘制详细数据
+  fill(50);
+  let y = 170;
+  text("时间: " + simTime.toFixed(2) + " 秒", width - 250, y); y += 20;
+  
+  text("位移:", width - 250, y); y += 20;
+  text("  X: " + realPositionX.toFixed(2) + " m", width - 250, y); y += 20;
+  text("  Y: " + realPositionY.toFixed(2) + " m", width - 250, y); y += 20;
+  text("  合位移: " + sqrt(realPositionX*realPositionX + realPositionY*realPositionY).toFixed(2) + " m", width - 250, y); y += 20;
+  
+  text("速度:", width - 250, y); y += 20;
+  text("  Vx: " + realVelocityX.toFixed(2) + " m/s", width - 250, y); y += 20;
+  text("  Vy: " + realVelocityY.toFixed(2) + " m/s", width - 250, y); y += 20;
+  text("  |V|: " + realSpeed.toFixed(2) + " m/s", width - 250, y); y += 20;
+  text("  偏向角: " + angle.toFixed(1) + "°", width - 250, y); y += 20;
+  
+  // 显示重力加速度
+  text("重力加速度: " + (gravity.y / scale).toFixed(2) + " m/s²", width - 250, y);
+}
+
+function togglePause() {
+  paused = !paused;
+  if (paused) {
+    buttons.pausePlay.html('继续');
+  } else {
+    buttons.pausePlay.html('暂停');
+  }
+}
+
+function toggleVectors() {
+  showVectors = !showVectors;
+  if (showVectors) {
+    buttons.toggleVectors.html('隐藏矢量');
+  } else {
+    buttons.toggleVectors.html('显示矢量');
+  }
+}
+
+function keyPressed() {
+  if (key === ' ') {
+    togglePause();
+  } else if (key === 'r' || key === 'R') {
+    resetSimulation();
+  } else if (key === 'v' || key === 'V') {
+    toggleVectors();
+  }
+}
+  </script>
+</body>
+</html>

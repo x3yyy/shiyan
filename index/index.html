@@ -1,0 +1,70 @@
+<!DOCTYPE html><html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>高中物理模拟实验平台</title>
+  <style>
+    body {
+      font-family: "Arial", sans-serif;
+      margin: 0;
+      background: #f2f2f2;
+    }
+    header {
+      background-color: #4CAF50;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+      font-size: 1.8rem;
+    }
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding: 2rem;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+      margin: 1rem;
+      padding: 1.5rem;
+      width: 280px;
+      text-align: center;
+      transition: transform 0.2s;
+    }
+    .card:hover {
+      transform: scale(1.05);
+    }
+    .card h2 {
+      font-size: 1.2rem;
+      color: #333;
+    }
+    .card a {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+      background-color: #4CAF50;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <header>高中物理模拟实验平台</header>
+  <div class="container">
+    <div class="card">
+      <h2>自由落体</h2>
+      <a href="experiments/freefall.html">进入实验</a>
+    </div>
+    <div class="card">
+      <h2>带电粒子在磁场中运动</h2>
+      <a href="experiments/magnetic_field.html">进入实验</a>
+    </div>
+     <div class="card">
+      <h2>抛体运动</h2>
+      <a href="experiments/paoti.html">进入实验</a>
+    </div>
+    <!-- 可继续添加更多模块卡片 -->
+  </div>
+</body>
+</html>

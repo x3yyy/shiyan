@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>自由落体实验</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <style>
+    body {
+      font-family: "Arial", sans-serif;
+      margin: 0;
+      background: #f0f0f0;
+    }
+    header {
+      background-color: #4CAF50;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+      font-size: 1.8rem;
+    }
+    .container {
+      display: flex;
+      justify-content: center;
+      padding: 2rem;
+    }
+    canvas {
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <header>自由落体实验</header>
+  <div class="container">
+    <script>
+      let ball;
+      let gravity = 9.8;function setup() {
+    createCanvas(600, 400);
+    ball = new Ball(width / 2, 50, 20);
+  }
+
+  function draw() {
+    background(240);
+    ball.applyForce(createVector(0, gravity));
+    ball.update();
+    ball.display();
+  }
+
+  class Ball {
+    constructor(x, y, r) {
+      this.position = createVector(x, y);
+      this.velocity = createVector(0, 0);
+      this.acceleration = createVector(0, 0);
+      this.radius = r;
+    }
+
+    applyForce(force) {
+      this.acceleration.add(force);
+    }
+
+    update() {
+      this.velocity.add(this.acceleration);
+      this.position.add(this.velocity);
+      this.acceleration.mult(0);
+    }
+
+    display() {
+      fill(255, 0, 0);
+      noStroke();
+      ellipse(this.position.x, this.position.y, this.radius * 2, this.radius * 2);
+    }
+  }
+</script>
+
+  </div>
+</body>
+</html>
